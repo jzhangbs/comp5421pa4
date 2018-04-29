@@ -1,6 +1,5 @@
 # COMP5421 Project 4
-This project implements _Photometric Stereo via Expectation Maximization_ by  
-Tai-Pang Wu and Chi-Keung Tang.
+This project implements _Photometric Stereo via Expectation Maximization_ by Tai-Pang Wu and Chi-Keung Tang.
 
 ## Algorithm description
 ### Uniform Resampling
