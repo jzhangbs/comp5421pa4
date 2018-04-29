@@ -1,3 +1,5 @@
+addpath(genpath('./gco/'));
+
 %% generate icosphere
 disp('generate icosphere');
 [v,~] = icosphere(4);
@@ -65,10 +67,26 @@ for i = 1:image_size(1)
             if k == denom_index
                 continue
             end
-            A(kp, :) = images(k,i,j)*lightvec(denom_index,:)-images(denom_index)*lightvec(k,:);
+            A(kp, :) = images(k,i,j)*lightvec(denom_index,:)-images(denom_index,i,j)*lightvec(k,:);
             kp = kp + 1;
         end
         [U,S,V] = svd(A,0);
         local_norm(i,j,:) = ( V(:,3)*(V(3,3)/abs(V(3,3))) )';
     end
 end
+
+%% refine
+disp('refine');
+norm = local_norm;
+
+%% visualize
+disp('visualize');
+slant_tilt = zeros([image_size 2]);
+for i = 1:image_size(1)
+    for j = 1:image_size(2)
+        slant_tilt(i,j,:) = grad2slanttilt(-norm(i,j,1)/norm(i,j,3),-norm(i,j,2)/norm(i,j,3));
+    end
+end
+depth_map = shapeletsurf(slant_tilt(:,:,1), slant_tilt(:,:,2), 6, 3, 2);
+figure, imshow(norm);
+figure, surf(depth_map);
