@@ -7,7 +7,7 @@ v = v(v(:,3)>=0,:);
 
 %% read data
 disp('read data');
-dataset_path = 'data/data04';
+dataset_path = 'data/data08';
 lightvec_raw = load(fullfile(dataset_path, 'lightvec.txt'));
 N_raw = length(lightvec_raw);
 images_path = dir(fullfile(dataset_path, '*.bmp'));
@@ -77,16 +77,67 @@ end
 
 %% refine
 disp('refine');
-norm = local_norm;
+
+% parameter
+sigma = 0.75;
+lambda = 0.5;
+
+% create
+disp('  create');
+[norm_v,~] = icosphere(5);
+norm_v = norm_v(norm_v(:,3)>=0,:);
+h = GCO_Create(prod(image_size), length(norm_v));
+
+% set init label
+disp('  set init label');
+local_norm_flat = reshape(local_norm, [], 3);
+[norm_nn_index, ~] = knnsearch(norm_v, local_norm_flat);
+GCO_SetLabeling(h, norm_nn_index);
+
+% set cost
+disp('  set cost');
+Ed = int32(pdist2(norm_v, local_norm_flat)*10000);
+Es = int32(lambda * log(1 + pdist2(norm_v, norm_v) / (2*sigma^2))*10000);
+GCO_SetDataCost(h, Ed);
+GCO_SetSmoothCost(h, Es);
+
+% set neighbor
+disp('  set neighbor');
+adj = sparse(prod(image_size),prod(image_size));
+for i = 1:image_size(1)-1
+    for j = 1:image_size(2)
+        adj((i-1)*image_size(2)+j, i*image_size(2)+j) = 1;
+    end
+end
+for i = 1:image_size(1)
+    for j = 1:image_size(2)-1
+        adj((i-1)*image_size(2)+j, (i-1)*image_size(2)+j+1) = 1;
+    end
+end
+GCO_SetNeighbors(h, adj);
+
+% graph cut
+disp('  graph cut');
+GCO_Expansion(h);
+norm_index = GCO_GetLabeling(h);
+GCO_Delete(h);
+norm_flat = norm_v(norm_index, :);
+refine_norm = reshape(norm_flat, image_size(1), image_size(2), 3);
 
 %% visualize
 disp('visualize');
-slant_tilt = zeros([image_size 2]);
+slant = zeros(image_size);
+tilt = zeros(image_size);
 for i = 1:image_size(1)
     for j = 1:image_size(2)
-        slant_tilt(i,j,:) = grad2slanttilt(-norm(i,j,1)/norm(i,j,3),-norm(i,j,2)/norm(i,j,3));
+        [slant(i,j), tilt(i,j)] = grad2slanttilt(-refine_norm(image_size(1)+1-i,j,1)/refine_norm(image_size(1)+1-i,j,3),-refine_norm(image_size(1)+1-i,j,2)/refine_norm(image_size(1)+1-i,j,3));
     end
 end
-depth_map = shapeletsurf(slant_tilt(:,:,1), slant_tilt(:,:,2), 6, 3, 2);
-figure, imshow(norm);
-figure, surf(depth_map);
+depth_map = shapeletsurf(slant, tilt, 6, 3, 2);
+figure, imshow(local_norm);
+figure, imshow(refine_norm);
+
+texture = imread(fullfile(dataset_path, images_path(denom_index).name));
+texture = texture(image_size(1):-1:1,:,:);
+figure, surf(depth_map, 'FaceColor','Cyan','EdgeColor','none'),camlight left,lighting phong,axis equal,axis vis3d,axis off;
+figure, surf(depth_map, texture,'FaceColor','texturemap','EdgeColor','none'),camlight left,lighting phong,axis equal,axis vis3d,axis off;
